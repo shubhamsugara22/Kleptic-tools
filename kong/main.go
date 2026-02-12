@@ -160,7 +160,7 @@ func createService(service Service) (string, error) {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict {
 		return "", fmt.Errorf("failed to create service: %s (status: %d)", body, resp.StatusCode)
 	}
@@ -188,7 +188,7 @@ func createRoute(serviceName string, route Route) (string, error) {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict {
 		return "", fmt.Errorf("failed to create route: %s (status: %d)", body, resp.StatusCode)
 	}
@@ -210,7 +210,7 @@ func testProxyRequest() error {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("proxy request failed with status: %d", resp.StatusCode)
 	}
@@ -235,7 +235,7 @@ func addPlugin(serviceName string, plugin Plugin) (string, error) {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusConflict {
 		return "", fmt.Errorf("failed to add plugin: %s (status: %d)", body, resp.StatusCode)
 	}
@@ -263,7 +263,7 @@ func listServices() error {
 
 	services := result["data"].([]interface{})
 	fmt.Printf("   Total services: %d\n", len(services))
-	
+
 	for i, svc := range services {
 		service := svc.(map[string]interface{})
 		fmt.Printf("   %d. Name: %s, Host: %s\n", i+1, service["name"], service["host"])
@@ -282,19 +282,19 @@ func testRateLimiting() {
 		}
 
 		fmt.Printf("   Request %d: Status %d", i, resp.StatusCode)
-		
+
 		// Check rate limit headers
 		if remaining := resp.Header.Get("X-RateLimit-Remaining-Minute"); remaining != "" {
 			fmt.Printf(" | Remaining: %s", remaining)
 		}
-		
+
 		if resp.StatusCode == http.StatusTooManyRequests {
 			fmt.Printf(" ⛔ Rate limit exceeded!")
 		} else {
 			fmt.Printf(" ✅")
 		}
 		fmt.Println()
-		
+
 		resp.Body.Close()
 		time.Sleep(500 * time.Millisecond)
 	}
