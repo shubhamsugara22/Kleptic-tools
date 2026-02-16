@@ -1,0 +1,11 @@
+apiVersion: v2
+name: kleptic-app
+description: A Helm chart for Kleptic Tools
+type: application
+version: 0.1.0
+appVersion: "1.0"
+maintainers:
+  - name: Kleptic Team
+keywords:
+  - kleptic
+  - tools
