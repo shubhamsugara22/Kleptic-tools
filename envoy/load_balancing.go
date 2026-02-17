@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // LoadBalancingStrategy defines the type of load balancing
@@ -485,9 +486,9 @@ lb_config:
 
 // PrintAllStrategies prints detailed guide for all strategies
 func PrintAllStrategies() {
-	fmt.Println("\n" + "="*80)
+	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("ENVOY LOAD BALANCING STRATEGIES - COMPREHENSIVE GUIDE")
-	fmt.Println("="*80 + "\n")
+	fmt.Println(strings.Repeat("=", 80) + "\n")
 
 	for i, guide := range StrategyGuides {
 		fmt.Printf("%d. %s\n", i+1, guide.Strategy)
@@ -510,10 +511,10 @@ func PrintAllStrategies() {
 		fmt.Println("   ```\n")
 
 		if i < len(StrategyGuides)-1 {
-			fmt.Println("-" * 80)
+			fmt.Println(strings.Repeat("-", 80))
 		}
 	}
-	fmt.Println("="*80 + "\n")
+	fmt.Println(strings.Repeat("=", 80) + "\n")
 }
 
 func main() {
@@ -582,9 +583,9 @@ func main() {
 	}
 
 	// Print strategy information
-	fmt.Println("\n" + "="*80)
+	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Printf("LOAD BALANCING STRATEGY: %s\n", strategy)
-	fmt.Println("=" * 80)
+	fmt.Println(strings.Repeat("=", 80))
 
 	for _, guide := range StrategyGuides {
 		if guide.Strategy == strategy {
@@ -602,9 +603,9 @@ func main() {
 		}
 	}
 
-	fmt.Println("\n" + "="*80)
+	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("Configuration Details:")
-	fmt.Println("=" * 80)
+	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("  Listener Port:  %d\n", *portFlag)
 	fmt.Printf("  Admin Port:     %d\n", *adminPortFlag)
 	fmt.Printf("  Cluster Name:   %s\n", *nameFlag)
