@@ -1,0 +1,7 @@
+flowchart TD
+    A[Application/Service] -- writes logs --> B[/var/log/*.log]
+    B -- Promtail reads --> C[Promtail]
+    C -- pushes logs --> D[Loki]
+    D -- stores & indexes --> E[Log Storage]
+    E -- queried by --> F[Grafana]
+    F -- displays logs --> G[User]
