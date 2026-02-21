@@ -1,0 +1,27 @@
+# Sample K9s config
+# Copy to: ~/.k9s/config.yml (Linux/macOS)
+#           %USERPROFILE%\.k9s\config.yml (Windows)
+
+k9s:
+  liveViewAutoRefresh: true
+  refreshRate: 2
+  maxConnRetry: 5
+  readOnly: false
+  noExitOnCtrlC: false
+  shellPod:
+    image: busybox:1.36
+    namespace: default
+  ui:
+    enableMouse: true
+    headless: false
+    logoless: false
+    crumbsless: false
+    reactive: true
+    noIcons: false
+    skin: default
+  logger:
+    tail: 100
+    buffer: 500
+    sinceSeconds: 300
+    textWrap: false
+    showTime: true
