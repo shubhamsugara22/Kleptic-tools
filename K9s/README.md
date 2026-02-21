@@ -54,6 +54,36 @@ K9s uses your current `kubectl` context and config from `~/.kube/config`.
 - `n` switch namespace
 - `/` filter
 
+## Cheat Sheet
+
+### Views
+
+- `:po` pods
+- `:svc` services
+- `:deploy` deployments
+- `:ns` namespaces
+- `:node` nodes
+
+### Common Actions
+
+- `l` logs (on a pod)
+- `d` describe (on a resource)
+- `e` edit (on a resource)
+- `x` shell/exec (on a pod)
+- `s` scale (on a deployment)
+
+### Filters and Search
+
+- `/` filter list
+- `Ctrl+f` find next match
+- `Ctrl+b` find previous match
+
+### Navigation
+
+- `Esc` clear filter or exit modal
+- `Enter` drill into a resource
+- `Backspace` go back
+
 ## Notes
 
 Make sure `kubectl` is installed and configured before using K9s.
