@@ -1,0 +1,205 @@
+# ApplicationSet Template
+# Automatically generate multiple applications from various sources
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: microservices-deployment
+  namespace: argocd
+spec:
+  # Generators define how to create applications
+  generators:
+  
+  # 1. Git Directory Generator - Create app per directory
+  - git:
+      repoURL: https://github.com/your-org/microservices.git
+      revision: main
+      directories:
+      - path: services/*
+      - path: jobs/*
+  
+  # 2. List Generator - Create apps from static list
+  - list:
+      elements:
+      - cluster: prod-us-east
+        url: https://prod-us-east.example.com
+        env: production
+      - cluster: prod-eu-west
+        url: https://prod-eu-west.example.com
+        env: production
+      - cluster: staging
+        url: https://staging.example.com
+        env: staging
+  
+  # 3. Cluster Generator - Create app per registered cluster
+  - clusters:
+      selector:
+        matchLabels:
+          environment: production
+      values:
+        region: '{{metadata.labels.region}}'
+        tier: '{{metadata.labels.tier}}'
+  
+  # Template for generated applications
+  template:
+    metadata:
+      name: '{{path.basename}}-{{cluster}}'
+      labels:
+        service: '{{path.basename}}'
+        cluster: '{{cluster}}'
+        environment: '{{env}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/microservices.git
+        targetRevision: main
+        path: '{{path}}'
+        helm:
+          valueFiles:
+          - values-{{env}}.yaml
+          parameters:
+          - name: image.tag
+            value: '{{env}}-latest'
+      destination:
+        server: '{{url}}'
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            maxDuration: 3m
+
+---
+# Git Files Generator - Generate apps from files in Git
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: config-driven-apps
+  namespace: argocd
+spec:
+  generators:
+  - git:
+      repoURL: https://github.com/your-org/app-configs.git
+      revision: main
+      files:
+      - path: "configs/*.json"
+  
+  template:
+    metadata:
+      name: '{{app.name}}'
+    spec:
+      project: '{{app.project}}'
+      source:
+        repoURL: '{{app.source.repo}}'
+        targetRevision: '{{app.source.revision}}'
+        path: '{{app.source.path}}'
+      destination:
+        server: '{{app.destination.server}}'
+        namespace: '{{app.destination.namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+
+---
+# Matrix Generator - Combine multiple generators
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: multi-env-deployment
+  namespace: argocd
+spec:
+  generators:
+  - matrix:
+      generators:
+      # First dimension: services
+      - git:
+          repoURL: https://github.com/your-org/apps.git
+          revision: main
+          directories:
+          - path: services/*
+      
+      # Second dimension: environments
+      - list:
+          elements:
+          - env: dev
+            cluster: https://dev.example.com
+            replicas: "1"
+          - env: staging
+            cluster: https://staging.example.com
+            replicas: "2"
+          - env: production
+            cluster: https://prod.example.com
+            replicas: "3"
+  
+  template:
+    metadata:
+      name: '{{path.basename}}-{{env}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/apps.git
+        targetRevision: main
+        path: '{{path}}'
+        helm:
+          parameters:
+          - name: replicaCount
+            value: '{{replicas}}'
+          - name: environment
+            value: '{{env}}'
+      destination:
+        server: '{{cluster}}'
+        namespace: '{{path.basename}}-{{env}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+
+---
+# Pull Request Generator - Auto-deploy PRs
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: preview-environments
+  namespace: argocd
+spec:
+  generators:
+  - pullRequest:
+      github:
+        owner: your-org
+        repo: your-app
+        tokenRef:
+          secretName: github-token
+          key: token
+        labels:
+        - preview
+      requeueAfterSeconds: 300
+  
+  template:
+    metadata:
+      name: 'preview-pr-{{number}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/your-app.git
+        targetRevision: '{{head_sha}}'
+        path: k8s
+        helm:
+          parameters:
+          - name: image.tag
+            value: 'pr-{{number}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'preview-pr-{{number}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true

@@ -1,0 +1,134 @@
+# AppProject Template
+# Define project boundaries and RBAC for applications
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: production-apps
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  # Project description
+  description: Production environment applications
+  
+  # Source repositories that apps can pull from
+  sourceRepos:
+  - https://github.com/your-org/*
+  - https://charts.bitnami.com/bitnami
+  - https://kubernetes.github.io/ingress-nginx
+  - https://prometheus-community.github.io/helm-charts
+  - https://grafana.github.io/helm-charts
+  
+  # Destinations where apps can be deployed
+  destinations:
+  # Allow deployment to production namespaces
+  - namespace: 'prod-*'
+    server: https://kubernetes.default.svc
+    name: in-cluster
+  
+  # Allow deployment to specific namespace
+  - namespace: ingress-nginx
+    server: https://kubernetes.default.svc
+  
+  # Allow deployment to monitoring namespace
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  
+  # Allow deployment to external cluster
+  - namespace: '*'
+    server: https://prod-cluster-us-east.example.com
+    name: prod-us-east
+  
+  # Cluster-scoped resources whitelist
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+  
+  # Namespace-scoped resources (optional, default allows all)
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  
+  # Namespace-scoped resources blacklist
+  namespaceResourceBlacklist:
+  - group: ''
+    kind: ResourceQuota
+  - group: ''
+    kind: LimitRange
+  
+  # Orphaned resources monitoring
+  orphanedResources:
+    warn: true
+    ignore:
+    - group: ''
+      kind: ConfigMap
+      name: kube-root-ca.crt
+  
+  # Roles for RBAC
+  roles:
+  # Admin role - full access
+  - name: prod-admin
+    description: Full access to production applications
+    policies:
+    - p, proj:production-apps:prod-admin, applications, *, production-apps/*, allow
+    - p, proj:production-apps:prod-admin, repositories, *, *, allow
+    - p, proj:production-apps:prod-admin, clusters, *, *, allow
+    groups:
+    - platform-team
+    - sre-team
+  
+  # Developer role - read and sync only
+  - name: prod-developer
+    description: Read and sync production applications
+    policies:
+    - p, proj:production-apps:prod-developer, applications, get, production-apps/*, allow
+    - p, proj:production-apps:prod-developer, applications, sync, production-apps/*, allow
+    groups:
+    - developers
+  
+  # Read-only role
+  - name: prod-viewer
+    description: View-only access to production applications
+    policies:
+    - p, proj:production-apps:prod-viewer, applications, get, production-apps/*, allow
+    groups:
+    - auditors
+    - support-team
+  
+  # Sync windows - define when syncs are allowed
+  syncWindows:
+  # Allow syncs during business hours on weekdays
+  - kind: allow
+    schedule: '0 9-17 * * 1-5'
+    duration: 8h
+    applications:
+    - '*'
+    manualSync: true
+  
+  # Deny syncs during weekend maintenance window
+  - kind: deny
+    schedule: '0 2-4 * * 0'
+    duration: 2h
+    applications:
+    - '*'
+    manualSync: false
+  
+  # Signature verification (optional)
+  signatureKeys:
+  - keyID: 4AEE18F83AFDEB23
+  
+  # Source namespaces (allows apps to reference resources)
+  sourceNamespaces:
+  - argocd
+  - production-config

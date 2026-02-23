@@ -2,10 +2,29 @@
 
 ArgoCD is a declarative, GitOps continuous delivery tool for Kubernetes. It automates the deployment of applications to Kubernetes clusters by using Git repositories as the single source of truth.
 
+## Quick Links
+
+📖 **[CHEATSHEET.md](CHEATSHEET.md)** - Quick reference for all ArgoCD commands and operations
+
+### Setup Scripts
+- [setup.sh](setup.sh) - Bash installation script for Linux/macOS
+- [setup.ps1](setup.ps1) - PowerShell installation script for Windows
+
+### Template Files
+- [basic-app.yaml](basic-app.yaml) - Basic application template
+- [helm-app.yaml](helm-app.yaml) - Helm chart application
+- [kustomize-app.yaml](kustomize-app.yaml) - Kustomize overlay application
+- [app-of-apps.yaml](app-of-apps.yaml) - App of Apps pattern
+- [app-project.yaml](app-project.yaml) - AppProject with RBAC
+- [applicationset.yaml](applicationset.yaml) - ApplicationSet for GitOps at scale
+- [sync-waves-example.yaml](sync-waves-example.yaml) - Sync waves and hooks demonstration
+
 ## Table of Contents
 
 - [Overview](#overview)
 - [Key Concepts](#key-concepts)
+- [ArgoCD Features We Use](#argocd-features-we-use)
+- [Application Templates](#application-templates)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Basic Setup](#basic-setup)
@@ -46,6 +65,507 @@ A Kubernetes cluster where applications are deployed.
 ### Sync Policy
 - **Manual**: Requires manual sync to deploy
 - **Automatic**: Auto-syncs when Git changes, with optional pruning and self-heal
+
+## ArgoCD Features We Use
+
+### 1. **Automated Sync**
+Automatically deploys changes from Git to Kubernetes clusters without manual intervention.
+
+```yaml
+syncPolicy:
+  automated:
+    prune: true      # Auto-delete resources removed from Git
+    selfHeal: true   # Revert manual changes to cluster
+```
+
+### 2. **Multi-Cluster Deployment**
+Manage multiple Kubernetes clusters from a single ArgoCD instance.
+
+```bash
+# Add production cluster
+argocd cluster add prod-cluster --name production
+
+# Add staging cluster
+argocd cluster add staging-cluster --name staging
+```
+
+### 3. **Application Health Monitoring**
+Continuous health checks for deployed applications with visual status indicators.
+
+- **Healthy**: All resources running as expected
+- **Progressing**: Deployment in progress
+- **Degraded**: Issues detected
+- **Suspended**: Application paused
+- **Missing**: Resources not found
+
+### 4. **GitOps with Multiple Sources**
+Support for various manifest formats:
+- **Plain YAML/JSON**: Kubernetes manifests
+- **Helm Charts**: Package manager for Kubernetes
+- **Kustomize**: Template-free customization
+- **Jsonnet**: Data templating language
+- **Custom Config Management Plugins**
+
+### 5. **App of Apps Pattern**
+Manage multiple applications using a parent application.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-app
+  namespace: argocd
+spec:
+  source:
+    repoURL: https://github.com/org/apps.git
+    path: applications/
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+```
+
+### 6. **Rollback & History**
+Track deployment history and rollback to previous versions.
+
+```bash
+# View history
+argocd app history example-app
+
+# Rollback to specific revision
+argocd app rollback example-app 5
+```
+
+### 7. **Resource Hooks**
+Execute actions before/after sync operations.
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pre-sync-migration
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  template:
+    spec:
+      containers:
+      - name: migration
+        image: migrations:latest
+        command: ["migrate"]
+      restartPolicy: Never
+```
+
+Available hooks:
+- `PreSync`: Before sync operation
+- `Sync`: During sync operation
+- `PostSync`: After sync operation
+- `SyncFail`: On sync failure
+- `Skip`: Skip sync
+
+### 8. **Sync Waves**
+Control deployment order using annotations.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"  # Deploy first
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # Deploy second
+```
+
+### 9. **Diff Customization**
+Ignore specific fields during diff comparisons.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: example
+spec:
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas  # Ignore replica differences
+```
+
+### 10. **SSO Integration**
+Integrate with identity providers (GitHub, GitLab, LDAP, OIDC).
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+data:
+  dex.config: |
+    connectors:
+    - type: github
+      id: github
+      name: GitHub
+      config:
+        clientID: $GITHUB_CLIENT_ID
+        clientSecret: $GITHUB_CLIENT_SECRET
+        orgs:
+        - name: my-org
+```
+
+### 11. **Progressive Delivery**
+Integration with Argo Rollouts for canary/blue-green deployments.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: rollout-canary
+spec:
+  replicas: 5
+  strategy:
+    canary:
+      steps:
+      - setWeight: 20
+      - pause: {duration: 1h}
+      - setWeight: 40
+      - pause: {duration: 1h}
+      - setWeight: 60
+      - pause: {duration: 1h}
+```
+
+### 12. **Secrets Management**
+Integration with external secret managers.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+spec:
+  source:
+    helm:
+      parameters:
+      - name: db.password
+        value: $ARGOCD_ENV_DB_PASSWORD  # From external source
+```
+
+## Application Templates
+
+### 1. **Basic Application Template**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/myorg/myapp.git
+    targetRevision: HEAD
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+```
+
+### 2. **Helm Chart Application**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-helm
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: nginx
+    targetRevision: 13.2.0
+    helm:
+      releaseName: my-nginx
+      parameters:
+      - name: service.type
+        value: LoadBalancer
+      - name: replicaCount
+        value: "3"
+      valueFiles:
+      - values-production.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: web
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+```
+
+### 3. **Kustomize Application**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kustomize-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/myorg/kustomize-app.git
+    targetRevision: main
+    path: overlays/production
+    kustomize:
+      namePrefix: prod-
+      nameSuffix: -v1
+      images:
+      - myapp:1.2.3
+      commonLabels:
+        environment: production
+        team: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### 4. **Multi-Source Application**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multi-source-app
+  namespace: argocd
+spec:
+  project: default
+  sources:
+  - repoURL: https://github.com/myorg/helm-charts.git
+    path: charts/myapp
+    targetRevision: main
+    helm:
+      valueFiles:
+      - $values/values-prod.yaml
+  - repoURL: https://github.com/myorg/config.git
+    targetRevision: main
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### 5. **App of Apps Template**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/myorg/applications.git
+    targetRevision: HEAD
+    path: apps
+    directory:
+      recurse: true
+      jsonnet: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### 6. **Environment-Specific Template**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api-production
+  namespace: argocd
+  labels:
+    environment: production
+    team: backend
+spec:
+  project: production-apps
+  source:
+    repoURL: https://github.com/myorg/api.git
+    targetRevision: v1.5.0  # Pinned version for production
+    path: k8s/overlays/production
+  destination:
+    server: https://prod-cluster.example.com
+    namespace: api-prod
+  syncPolicy:
+    automated:
+      prune: false  # Manual pruning in production
+      selfHeal: false  # Manual healing in production
+    syncOptions:
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+```
+
+### 7. **ApplicationSet Template (GitOps at Scale)**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: microservices
+  namespace: argocd
+spec:
+  generators:
+  - git:
+      repoURL: https://github.com/myorg/microservices.git
+      revision: HEAD
+      directories:
+      - path: services/*
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/myorg/microservices.git
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+```
+
+### 8. **AppProject Template**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: team-platform
+  namespace: argocd
+spec:
+  description: Platform team applications
+  sourceRepos:
+  - https://github.com/myorg/*
+  - https://charts.helm.sh/stable
+  destinations:
+  - namespace: 'platform-*'
+    server: https://kubernetes.default.svc
+  - namespace: 'monitoring'
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: 'rbac.authorization.k8s.io'
+    kind: ClusterRole
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  roles:
+  - name: platform-admin
+    description: Full access to platform apps
+    policies:
+    - p, proj:team-platform:platform-admin, applications, *, team-platform/*, allow
+    groups:
+    - platform-team
+```
+
+### 9. **Private Repository Application**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: private-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:myorg/private-repo.git
+    targetRevision: main
+    path: deployments
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+**Note**: Configure SSH key or credentials first:
+```bash
+argocd repo add git@github.com:myorg/private-repo.git \
+  --ssh-private-key-path ~/.ssh/argocd_deploy_key
+```
+
+### 10. **With Resource Tracking & Notifications**
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: critical-service
+  namespace: argocd
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: platform-team
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: platform-alerts
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/myorg/critical-service.git
+    targetRevision: HEAD
+    path: manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: critical
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+  revisionHistoryLimit: 10
+```
 
 ## Prerequisites
 

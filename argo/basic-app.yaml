@@ -1,0 +1,78 @@
+# Basic ArgoCD Application Template
+# Deploy a simple application from a Git repository
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-application
+  namespace: argocd
+  # Finalizer ensures cascade deletion
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+  labels:
+    app: my-application
+    team: platform
+    environment: production
+spec:
+  # Project this application belongs to
+  project: default
+  
+  # Source repository configuration
+  source:
+    # Git repository URL
+    repoURL: https://github.com/your-org/your-repo.git
+    
+    # Target branch/tag/commit
+    targetRevision: HEAD
+    
+    # Path to Kubernetes manifests within the repo
+    path: k8s/manifests
+  
+  # Destination cluster and namespace
+  destination:
+    # Kubernetes API server URL (in-cluster)
+    server: https://kubernetes.default.svc
+    
+    # Target namespace
+    namespace: default
+  
+  # Sync policy configuration
+  syncPolicy:
+    # Automated sync settings
+    automated:
+      # Automatically delete resources that are no longer in Git
+      prune: true
+      
+      # Automatically sync when cluster state differs from Git
+      selfHeal: true
+      
+      # Allow empty resources
+      allowEmpty: false
+    
+    # Sync options
+    syncOptions:
+    # Create namespace if it doesn't exist
+    - CreateNamespace=true
+    
+    # Validate resources before applying
+    - Validate=true
+    
+    # Use server-side apply
+    - ServerSideApply=false
+    
+    # Retry configuration
+    retry:
+      # Number of retry attempts
+      limit: 5
+      backoff:
+        # Initial retry delay
+        duration: 5s
+        
+        # Backoff factor
+        factor: 2
+        
+        # Maximum retry delay
+        maxDuration: 3m
+  
+  # Number of old revisions to keep
+  revisionHistoryLimit: 10

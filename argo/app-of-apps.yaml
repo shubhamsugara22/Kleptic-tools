@@ -1,0 +1,99 @@
+# App of Apps Pattern
+# Manage multiple applications from a single parent application
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-applications
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/your-org/argocd-apps.git
+    targetRevision: main
+    path: applications
+    
+    # Directory options
+    directory:
+      # Recurse into subdirectories
+      recurse: true
+      
+      # Include/exclude patterns
+      include: '*.yaml'
+      exclude: 'test-*.yaml'
+      
+      # Enable jsonnet processing
+      jsonnet: {}
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+
+---
+# Example child application format
+# Place in applications/ directory
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-prometheus
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus
+    targetRevision: 23.1.0
+    helm:
+      values: |
+        server:
+          persistentVolume:
+            enabled: true
+            size: 50Gi
+        alertmanager:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-grafana
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: grafana
+    targetRevision: 6.57.4
+    helm:
+      values: |
+        persistence:
+          enabled: true
+          size: 10Gi
+        adminPassword: changeme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

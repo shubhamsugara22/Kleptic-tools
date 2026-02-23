@@ -1,0 +1,249 @@
+# Sync Waves and Hooks Example
+# Control deployment order and execute hooks during sync
+
+# Wave 0: Database Migration (PreSync Hook)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  template:
+    spec:
+      containers:
+      - name: migration
+        image: myapp/migrations:v1.5.0
+        command: ["./migrate", "up"]
+        env:
+        - name: DB_HOST
+          value: postgres.myapp.svc.cluster.local
+      restartPolicy: Never
+  backoffLimit: 3
+
+---
+# Wave 1: ConfigMaps and Secrets
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+data:
+  APP_ENV: production
+  LOG_LEVEL: info
+  FEATURE_FLAGS: |
+    {
+      "new_ui": true,
+      "beta_features": false
+    }
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+type: Opaque
+stringData:
+  DATABASE_URL: postgres://user:pass@postgres:5432/myapp
+  API_KEY: secret-api-key
+
+---
+# Wave 2: Database Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# Wave 3: Application Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+        version: v1.5.0
+    spec:
+      containers:
+      - name: app
+        image: myapp:v1.5.0
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Wave 4: Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  selector:
+    app: myapp
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# Wave 5: Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - myapp.example.com
+    secretName: myapp-tls
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: myapp
+            port:
+              number: 80
+
+---
+# PostSync Hook: Smoke Tests
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: smoke-tests
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  template:
+    spec:
+      containers:
+      - name: smoke-test
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Running smoke tests..."
+          curl -f http://myapp.myapp.svc.cluster.local/health || exit 1
+          curl -f http://myapp.myapp.svc.cluster.local/ready || exit 1
+          echo "Smoke tests passed!"
+      restartPolicy: Never
+  backoffLimit: 3
+
+---
+# SyncFail Hook: Notification on failure
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sync-failure-notification
+  namespace: myapp
+  annotations:
+    argocd.argoproj.io/hook: SyncFail
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  template:
+    spec:
+      containers:
+      - name: notify
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          curl -X POST https://hooks.slack.com/services/YOUR/WEBHOOK/URL \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"ArgoCD sync failed for myapp"}'
+      restartPolicy: Never

@@ -1,0 +1,63 @@
+# Kustomize ArgoCD Application Template
+# Deploy applications using Kustomize overlays
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api-service
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/your-org/api-service.git
+    targetRevision: main
+    
+    # Path to kustomize overlay
+    path: k8s/overlays/production
+    
+    kustomize:
+      # Prefix for all resource names
+      namePrefix: prod-
+      
+      # Suffix for all resource names
+      nameSuffix: -v1
+      
+      # Common labels for all resources
+      commonLabels:
+        environment: production
+        team: backend
+        managed-by: argocd
+      
+      # Common annotations for all resources
+      commonAnnotations:
+        deployment-date: "2026-02-23"
+        version: "1.5.0"
+      
+      # Override images
+      images:
+      - name: api-service
+        newName: myregistry.io/api-service
+        newTag: v1.5.0
+      
+      # Force common labels
+      forceCommonLabels: false
+      
+      # Force common annotations
+      forceCommonAnnotations: false
+      
+      # Kustomize version
+      version: v5.0.0
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: api-production
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
