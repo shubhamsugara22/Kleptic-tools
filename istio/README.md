@@ -35,23 +35,29 @@ cd istio
 
 ## Programmatic Traffic Management
 
-For automated traffic management, use the Go-based traffic handler:
+A Go-based traffic handler is available for inspecting Istio configurations:
 
 ```bash
-# Install dependencies
-go mod download
+# Build the tool
+go build -o traffic-handler traffic-handler.go
 
-# Run traffic handler
-go run traffic-handler.go
+# Run in default namespace
+./traffic-handler
 
-# Or with custom namespace
-NAMESPACE=production go run traffic-handler.go
+# Run in specific namespace
+NAMESPACE=production ./traffic-handler
 
-# Using Makefile
-make deps && make run
+# Windows
+$env:NAMESPACE="production"
+.\traffic-handler.exe
 ```
 
-See [USAGE.md](USAGE.md) for detailed usage and examples.
+The tool displays:
+- ✓ VirtualServices with traffic routing and weights
+- ✓ DestinationRules with service subsets
+- ✓ Gateways with ingress configuration
+
+**See [USAGE.md](USAGE.md) for complete documentation and examples.**
 
 ## Installation Steps
 
