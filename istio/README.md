@@ -33,6 +33,26 @@ cd istio
 .\setup.ps1
 ```
 
+## Programmatic Traffic Management
+
+For automated traffic management, use the Go-based traffic handler:
+
+```bash
+# Install dependencies
+go mod download
+
+# Run traffic handler
+go run traffic-handler.go
+
+# Or with custom namespace
+NAMESPACE=production go run traffic-handler.go
+
+# Using Makefile
+make deps && make run
+```
+
+See [USAGE.md](USAGE.md) for detailed usage and examples.
+
 ## Installation Steps
 
 1. **Install Istio Control Plane**
@@ -162,10 +182,16 @@ kubectl delete namespace istio-system
 - [Task Examples](https://istio.io/latest/docs/tasks/)
 - [Troubleshooting Guide](https://istio.io/latest/docs/ops/troubleshooting/)
 
-## Additional Configuration Files
+## Directory Files
 
-See the configuration examples in this directory for:
-- Virtual Services and Destination Rules
-- Gateway configurations
-- Authorization policies
-- Service Entries for external services
+This directory contains the following resources:
+
+- **setup.sh / setup.ps1**: Automated Istio installation scripts
+- **traffic-handler.go**: Go application for programmatic traffic management
+- **go.mod**: Go module dependencies
+- **Makefile**: Build and run commands for the traffic handler
+- **USAGE.md**: Quick usage guide for the Go traffic handler
+- **traffic-management.md**: YAML examples for VirtualServices and DestinationRules
+- **security-policies.md**: Security and authorization policy examples
+- **observability.md**: Monitoring, tracing, and metrics configuration
+- **CHEATSHEET.md**: Quick reference for common operations
