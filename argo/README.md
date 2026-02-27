@@ -4,7 +4,13 @@ ArgoCD is a declarative, GitOps continuous delivery tool for Kubernetes. It auto
 
 ## Quick Links
 
-📖 **[CHEATSHEET.md](CHEATSHEET.md)** - Quick reference for all ArgoCD commands and operations
+> 📋 **[INDEX.md](INDEX.md)** - Complete documentation index with learning paths, use case navigation, and quick search
+
+### 📚 Documentation Guides
+- 📖 **[CHEATSHEET.md](CHEATSHEET.md)** - Quick reference for all ArgoCD commands and operations
+- 🏗️ **[PRODUCTION-GUIDE.md](PRODUCTION-GUIDE.md)** - High availability, security, monitoring, and disaster recovery
+- 🔧 **[INTEGRATION-GUIDE.md](INTEGRATION-GUIDE.md)** - CI/CD pipelines, secrets management, image updater, and notifications
+- 🐛 **[TROUBLESHOOTING-GUIDE.md](TROUBLESHOOTING-GUIDE.md)** - Common issues, debugging, performance tuning, and advanced patterns
 
 ### Setup Scripts
 - [setup.sh](setup.sh) - Bash installation script for Linux/macOS
