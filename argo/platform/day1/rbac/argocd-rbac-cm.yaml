@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    # Global platform roles
+    g, platform-admins, role:admin
+    g, platform-viewers, role:readonly
+
+    # Project-scoped roles
+    g, dev-admins, proj:team-dev:dev-admin
+    g, dev-operators, proj:team-dev:dev-operator
+
+    g, prod-admins, proj:team-prod:prod-admin
+    g, prod-releasers, proj:team-prod:prod-release
+
+    g, platform-admins, proj:platform-core:platform-admin
+    g, platform-viewers, proj:platform-core:platform-readonly

@@ -1,0 +1,147 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform-core
+  namespace: argocd
+spec:
+  description: Platform-owned services and controllers.
+  sourceRepos:
+  - https://github.com/shubhamsugara22/Kleptic-tools
+  - https://prometheus-community.github.io/helm-charts
+  - https://grafana.github.io/helm-charts
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: argocd
+  - server: https://kubernetes.default.svc
+    namespace: platform-*
+  - server: https://kubernetes.default.svc
+    namespace: monitoring
+  clusterResourceWhitelist:
+  - group: ""
+    kind: Namespace
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  namespaceResourceWhitelist:
+  - group: "*"
+    kind: "*"
+  roles:
+  - name: platform-admin
+    description: Full access to platform apps.
+    policies:
+    - p, proj:platform-core:platform-admin, applications, *, platform-core/*, allow
+    - p, proj:platform-core:platform-admin, repositories, *, *, allow
+    groups:
+    - platform-admins
+  - name: platform-readonly
+    description: Read-only access to platform apps.
+    policies:
+    - p, proj:platform-core:platform-readonly, applications, get, platform-core/*, allow
+    groups:
+    - platform-viewers
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: team-dev
+  namespace: argocd
+spec:
+  description: Team-owned development and test workloads.
+  sourceRepos:
+  - https://github.com/shubhamsugara22/Kleptic-tools
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: dev-*
+  - server: https://kubernetes.default.svc
+    namespace: test-*
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: StatefulSet
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+  - group: networking.k8s.io
+    kind: Ingress
+  - group: ""
+    kind: Service
+  - group: ""
+    kind: ConfigMap
+  - group: ""
+    kind: Secret
+  - group: ""
+    kind: ServiceAccount
+  roles:
+  - name: dev-admin
+    description: Admin for team-dev project.
+    policies:
+    - p, proj:team-dev:dev-admin, applications, *, team-dev/*, allow
+    groups:
+    - dev-admins
+  - name: dev-operator
+    description: Sync and view only for day-to-day operations.
+    policies:
+    - p, proj:team-dev:dev-operator, applications, get, team-dev/*, allow
+    - p, proj:team-dev:dev-operator, applications, sync, team-dev/*, allow
+    groups:
+    - dev-operators
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: team-prod
+  namespace: argocd
+spec:
+  description: Team-owned production workloads.
+  sourceRepos:
+  - https://github.com/shubhamsugara22/Kleptic-tools
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: prod-*
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+  - group: apps
+    kind: Deployment
+  - group: apps
+    kind: StatefulSet
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+  - group: networking.k8s.io
+    kind: Ingress
+  - group: ""
+    kind: Service
+  - group: ""
+    kind: ConfigMap
+  - group: ""
+    kind: Secret
+  - group: ""
+    kind: ServiceAccount
+  roles:
+  - name: prod-admin
+    description: Full app access for production owners.
+    policies:
+    - p, proj:team-prod:prod-admin, applications, *, team-prod/*, allow
+    groups:
+    - prod-admins
+  - name: prod-release
+    description: Release role can read and sync only.
+    policies:
+    - p, proj:team-prod:prod-release, applications, get, team-prod/*, allow
+    - p, proj:team-prod:prod-release, applications, sync, team-prod/*, allow
+    groups:
+    - prod-releasers
+  syncWindows:
+  - kind: allow
+    schedule: '0 9-18 * * 1-5'
+    duration: 9h
+    applications:
+    - '*'
+    manualSync: true
+  - kind: deny
+    schedule: '0 0-8,19-23 * * 1-5'
+    duration: 13h
+    applications:
+    - '*'
+    manualSync: false

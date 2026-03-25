@@ -41,6 +41,20 @@ kubectl apply -f basic-app.yaml
 - Advanced patterns (Argo Rollouts, blue-green, canary)
 - Multi-tenancy configuration
 
+### 🚀 Day 1 Baseline (Implemented)
+- **[platform/day1/README.md](platform/day1/README.md)** - Runbook for project boundaries and RBAC bootstrap
+- **[platform/day1/projects/appprojects.yaml](platform/day1/projects/appprojects.yaml)** - `platform-core`, `team-dev`, `team-prod` AppProjects
+- **[platform/day1/rbac/argocd-rbac-cm.yaml](platform/day1/rbac/argocd-rbac-cm.yaml)** - Group-to-role mappings
+- **[platform/day1/apps/root-app.yaml](platform/day1/apps/root-app.yaml)** - Parent app-of-apps bootstrap
+
+Apply once in order:
+
+```bash
+kubectl apply -f argo/platform/day1/projects/appprojects.yaml
+kubectl apply -f argo/platform/day1/rbac/argocd-rbac-cm.yaml
+kubectl apply -f argo/platform/day1/apps/root-app.yaml
+```
+
 ### 🛠️ Setup Scripts
 - **[setup.sh](setup.sh)** - Bash installation script for Linux/macOS
 - **[setup.ps1](setup.ps1)** - PowerShell installation script for Windows
