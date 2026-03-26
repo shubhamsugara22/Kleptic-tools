@@ -71,6 +71,26 @@ Direct apply (optional):
 kubectl apply -f argo/platform/day2/apps/env-applicationset.yaml
 ```
 
+### Day 3 Baseline (Started)
+- **[platform/day3/README.md](platform/day3/README.md)** - Runbook for secrets and policy guardrails
+- **[platform/day1/apps/children/day3-bootstrap.yaml](platform/day1/apps/children/day3-bootstrap.yaml)** - Day 3 bootstrap child app
+- **[platform/day3/apps/kyverno-operator.yaml](platform/day3/apps/kyverno-operator.yaml)** - Kyverno installation via Argo CD
+- **[platform/day3/apps/external-secrets-operator.yaml](platform/day3/apps/external-secrets-operator.yaml)** - External Secrets Operator installation
+- **[platform/day3/apps/kyverno-policy-pack.yaml](platform/day3/apps/kyverno-policy-pack.yaml)** - Enforced cluster policy pack
+
+Guardrails included:
+- Required labels on workloads
+- Required CPU/memory requests and limits
+- Privileged containers disallowed
+
+Direct apply (optional):
+
+```bash
+kubectl apply -f argo/platform/day3/apps/kyverno-operator.yaml
+kubectl apply -f argo/platform/day3/apps/external-secrets-operator.yaml
+kubectl apply -f argo/platform/day3/apps/kyverno-policy-pack.yaml
+```
+
 ### 🛠️ Setup Scripts
 - **[setup.sh](setup.sh)** - Bash installation script for Linux/macOS
 - **[setup.ps1](setup.ps1)** - PowerShell installation script for Windows
