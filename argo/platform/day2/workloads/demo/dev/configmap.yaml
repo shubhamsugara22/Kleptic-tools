@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-app-config
+  labels:
+    app: demo-app
+    environment: dev
+data:
+  APP_NAME: demo-app
+  ENVIRONMENT: dev
+  MESSAGE: Day 2 ApplicationSet deployment for dev (auto-sync enabled)

@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: env-demo-fanout
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+  - missingkey=error
+  generators:
+  - list:
+      elements:
+      - env: dev
+        project: team-dev
+        namespace: dev-sample
+        autoSync: true
+      - env: stage
+        project: team-dev
+        namespace: test-sample
+        autoSync: false
+      - env: prod
+        project: team-prod
+        namespace: prod-sample
+        autoSync: false
+  template:
+    metadata:
+      name: demo-{{.env}}
+      namespace: argocd
+      labels:
+        managed-by: applicationset
+        environment: '{{.env}}'
+    spec:
+      project: '{{.project}}'
+      source:
+        repoURL: https://github.com/shubhamsugara22/Kleptic-tools
+        targetRevision: main
+        path: argo/platform/day2/workloads/demo/{{.env}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        syncOptions:
+        - CreateNamespace=true
+  templatePatch: |
+    {{- if .autoSync }}
+    spec:
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+    {{- end }}

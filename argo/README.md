@@ -55,6 +55,22 @@ kubectl apply -f argo/platform/day1/rbac/argocd-rbac-cm.yaml
 kubectl apply -f argo/platform/day1/apps/root-app.yaml
 ```
 
+### Day 2 Baseline (Started)
+- **[platform/day2/README.md](platform/day2/README.md)** - Runbook for environment fan-out
+- **[platform/day2/apps/env-applicationset.yaml](platform/day2/apps/env-applicationset.yaml)** - One template generates `demo-dev`, `demo-stage`, `demo-prod`
+- **[platform/day1/apps/children/day2-bootstrap.yaml](platform/day1/apps/children/day2-bootstrap.yaml)** - Day 2 bootstrap child app
+
+Behavior:
+- `dev`: auto-sync enabled (`prune` + `selfHeal`)
+- `stage`: manual sync
+- `prod`: manual sync
+
+Direct apply (optional):
+
+```bash
+kubectl apply -f argo/platform/day2/apps/env-applicationset.yaml
+```
+
 ### 🛠️ Setup Scripts
 - **[setup.sh](setup.sh)** - Bash installation script for Linux/macOS
 - **[setup.ps1](setup.ps1)** - PowerShell installation script for Windows
