@@ -1,0 +1,111 @@
+# Traefik Authentication Middleware Examples
+#
+# Covers three auth patterns:
+#   1. Basic Auth        — username/password via htpasswd
+#   2. Forward Auth      — delegate auth to an external service (e.g. Authelia, oauth2-proxy)
+#   3. IP Allowlist      — restrict access by source IP
+#
+# Usage:
+#   docker network create traefik-network
+#   docker-compose -f docker-compose-auth.yml up -d
+#
+# Generate a bcrypt password hash for Basic Auth:
+#   echo $(htpasswd -nb admin yourpassword) | sed -e s/\\$/\\$\\$/g
+
+version: "3"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8080:8080"
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik-network"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-network
+
+  # ── 1. Basic Auth ─────────────────────────────────────────────────────────
+  # Credentials: admin / password  (replace with your own hash)
+  basic-auth-app:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.basic-auth-app.rule=Host(`basic.localhost`)"
+      - "traefik.http.routers.basic-auth-app.entrypoints=web"
+      - "traefik.http.routers.basic-auth-app.middlewares=basic-auth"
+      - "traefik.http.services.basic-auth-app.loadbalancer.server.port=80"
+      # Users format: user:hashed-password  (note: $ must be doubled as $$)
+      - "traefik.http.middlewares.basic-auth.basicauth.users=admin:$$apr1$$H6uskkkW$$IgXLP6ewTrSuBkTrqE8wj/"
+      - "traefik.http.middlewares.basic-auth.basicauth.realm=Restricted Area"
+      - "traefik.http.middlewares.basic-auth.basicauth.removeheader=true"
+    networks:
+      - traefik-network
+
+  # ── 2. Forward Auth (oauth2-proxy / Authelia style) ───────────────────────
+  # Traefik forwards every request to the auth-service first.
+  # If it returns 2xx the request proceeds; otherwise the auth response is sent.
+  forward-auth-app:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.forward-auth-app.rule=Host(`secure.localhost`)"
+      - "traefik.http.routers.forward-auth-app.entrypoints=web"
+      - "traefik.http.routers.forward-auth-app.middlewares=forward-auth"
+      - "traefik.http.services.forward-auth-app.loadbalancer.server.port=80"
+      # Point to your auth service endpoint
+      - "traefik.http.middlewares.forward-auth.forwardauth.address=http://auth-service:4181"
+      - "traefik.http.middlewares.forward-auth.forwardauth.trustforwardheader=true"
+      # Forward selected headers from the auth response to the upstream
+      - "traefik.http.middlewares.forward-auth.forwardauth.authresponseheaders=X-Auth-User,X-Auth-Email"
+    networks:
+      - traefik-network
+
+  # Minimal oauth2-proxy placeholder — replace with your real auth service
+  auth-service:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    restart: unless-stopped
+    environment:
+      - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4181
+      # Configure your provider — see https://oauth2-proxy.github.io/oauth2-proxy/
+      - OAUTH2_PROXY_PROVIDER=github
+      - OAUTH2_PROXY_CLIENT_ID=${OAUTH2_CLIENT_ID:-change-me}
+      - OAUTH2_PROXY_CLIENT_SECRET=${OAUTH2_CLIENT_SECRET:-change-me}
+      - OAUTH2_PROXY_COOKIE_SECRET=${OAUTH2_COOKIE_SECRET:-change-me-32-chars}
+      - OAUTH2_PROXY_EMAIL_DOMAINS=*
+      - OAUTH2_PROXY_UPSTREAM=static://202
+      - OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=true
+    networks:
+      - traefik-network
+
+  # ── 3. IP Allowlist ───────────────────────────────────────────────────────
+  # Only requests from the listed CIDR ranges reach the service.
+  ip-restricted-app:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ip-restricted-app.rule=Host(`internal.localhost`)"
+      - "traefik.http.routers.ip-restricted-app.entrypoints=web"
+      - "traefik.http.routers.ip-restricted-app.middlewares=ip-allowlist"
+      - "traefik.http.services.ip-restricted-app.loadbalancer.server.port=80"
+      # Comma-separated CIDR ranges that are allowed
+      - "traefik.http.middlewares.ip-allowlist.ipallowlist.sourcerange=127.0.0.1/32,10.0.0.0/8,192.168.0.0/16"
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    external: true

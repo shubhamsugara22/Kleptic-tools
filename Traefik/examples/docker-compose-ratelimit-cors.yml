@@ -1,0 +1,110 @@
+# Traefik Rate Limiting & CORS Middleware Examples
+#
+# Covers:
+#   1. Rate Limiting   — cap requests per second per source IP
+#   2. CORS Headers    — allow cross-origin requests with fine-grained control
+#   3. Combined        — rate limiting + CORS on a public API
+#
+# Usage:
+#   docker network create traefik-network
+#   docker-compose -f docker-compose-ratelimit-cors.yml up -d
+
+version: "3"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8080:8080"
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik-network"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-network
+
+  # ── 1. Rate Limiting ──────────────────────────────────────────────────────
+  # average: sustained requests/sec per source IP
+  # burst:   max requests allowed in a single surge above the average
+  rate-limited-app:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rate-limited-app.rule=Host(`ratelimit.localhost`)"
+      - "traefik.http.routers.rate-limited-app.entrypoints=web"
+      - "traefik.http.routers.rate-limited-app.middlewares=global-ratelimit"
+      - "traefik.http.services.rate-limited-app.loadbalancer.server.port=80"
+      # 20 req/s steady; allow burst up to 50
+      - "traefik.http.middlewares.global-ratelimit.ratelimit.average=20"
+      - "traefik.http.middlewares.global-ratelimit.ratelimit.burst=50"
+      # Rate-limit per source IP (default); set to "request.host" for per-host limiting
+      - "traefik.http.middlewares.global-ratelimit.ratelimit.sourcecriterion.ipstrategy.depth=1"
+    networks:
+      - traefik-network
+
+  # ── 2. CORS ───────────────────────────────────────────────────────────────
+  # Allows browsers to call this service from different origins.
+  cors-app:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cors-app.rule=Host(`cors.localhost`)"
+      - "traefik.http.routers.cors-app.entrypoints=web"
+      - "traefik.http.routers.cors-app.middlewares=cors"
+      - "traefik.http.services.cors-app.loadbalancer.server.port=80"
+      # Allowed origins — change * to specific domains in production
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,PATCH,DELETE,OPTIONS"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization,X-Requested-With"
+      - "traefik.http.middlewares.cors.headers.accesscontrolexposeheaders=X-Total-Count,Link"
+      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=86400"
+      - "traefik.http.middlewares.cors.headers.addvaryheader=true"
+    networks:
+      - traefik-network
+
+  # ── 3. Combined: Public API with Rate Limit + CORS + Security Headers ─────
+  public-api:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.public-api.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.public-api.entrypoints=web"
+      - "traefik.http.routers.public-api.middlewares=api-ratelimit,api-cors,api-security"
+      - "traefik.http.services.public-api.loadbalancer.server.port=80"
+
+      # Rate limit: 100 req/s, burst 200
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.burst=200"
+
+      # CORS (restrict to known frontend domain in production)
+      - "traefik.http.middlewares.api-cors.headers.accesscontrolalloworiginlist=https://app.example.com"
+      - "traefik.http.middlewares.api-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.api-cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
+      - "traefik.http.middlewares.api-cors.headers.accesscontrolmaxage=3600"
+      - "traefik.http.middlewares.api-cors.headers.addvaryheader=true"
+
+      # Security headers
+      - "traefik.http.middlewares.api-security.headers.frameDeny=true"
+      - "traefik.http.middlewares.api-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.api-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.api-security.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.api-security.headers.permissionsPolicy=camera=(), microphone=(), geolocation=()"
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    external: true

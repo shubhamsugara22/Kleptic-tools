@@ -1,0 +1,77 @@
+# Traefik with automatic HTTPS via Let's Encrypt
+#
+# Prerequisites:
+#   1. Point your domain DNS A record to this server's public IP.
+#   2. Set ACME_EMAIL and DOMAIN environment variables, or edit below.
+#   3. Run:  touch acme.json && chmod 600 acme.json
+#   4. Run:  docker network create traefik-network
+#   5. Run:  docker-compose -f docker-compose-ssl.yml up -d
+#
+# Environment variables (can be set in a .env file):
+#   ACME_EMAIL  - your email for Let's Encrypt notifications
+#   DOMAIN      - your domain, e.g. example.com
+
+version: "3"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      # API / Dashboard
+      - "--api.dashboard=true"
+      # Docker provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik-network"
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Redirect all HTTP → HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      # Let's Encrypt (ACME)
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-your-email@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme.json"
+      # Logging
+      - "--log.level=INFO"
+      - "--accesslog=true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./acme.json:/acme.json
+    labels:
+      # Secure dashboard behind HTTPS on traefik.<domain>
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      # Generate with: echo $(htpasswd -nb admin yourpassword) | sed -e s/\\$/\\$\\$/g
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=admin:$$apr1$$H6uskkkW$$IgXLP6ewTrSuBkTrqE8wj/"
+    networks:
+      - traefik-network
+
+  # Example application — swap this for your real service
+  webapp:
+    image: nginx:alpine
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webapp.rule=Host(`${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.webapp.entrypoints=websecure"
+      - "traefik.http.routers.webapp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.webapp.loadbalancer.server.port=80"
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    external: true
