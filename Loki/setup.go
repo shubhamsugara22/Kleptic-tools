@@ -31,6 +31,7 @@ func main() {
 
 	ensureNetwork(networkName)
 	ensureLokiConfig()
+	ensurePromtailConfig()
 	ensureComposeConfig(lokiVersion, lokiPort, networkName, grafanaEnabled, grafanaPort)
 
 	runCmd(composeBin, "up", "-d")
@@ -86,6 +87,31 @@ ingester:
   chunk_idle_period: 3m
   chunk_retain_period: 1m
   max_chunk_age: 1h
+func ensurePromtailConfig() {
+	if fileExists("promtail-config.yml") {
+		return
+	}
+	content := `server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: system-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*.log
+`
+	writeFile("promtail-config.yml", content)
+}
   chunk_encoding: snappy
 
 limits_config:
@@ -132,20 +158,33 @@ func ensureComposeConfig(version, port, network, grafanaEnabled, grafanaPort str
 	lokiService := fmt.Sprintf(`version: '3'
 
 services:
-  loki:
-    image: grafana/loki:%s
-    container_name: loki
-    restart: unless-stopped
-    ports:
-      - "%s:3100"
-    volumes:
-      - ./loki-config.yml:/etc/loki/local-config.yml:ro
-      - loki-data:/loki
-    environment:
-      - LOKI_CONFIG_FILE=/etc/loki/local-config.yml
-    networks:
-      - %s
-`, version, port, network)
+	loki:
+		image: grafana/loki:%s
+		container_name: loki
+		restart: unless-stopped
+		ports:
+			- "%s:3100"
+		volumes:
+			- ./loki-config.yml:/etc/loki/local-config.yml:ro
+			- loki-data:/loki
+		environment:
+			- LOKI_CONFIG_FILE=/etc/loki/local-config.yml
+		networks:
+			- %s
+
+	promtail:
+		image: grafana/promtail:latest
+		container_name: promtail
+		restart: unless-stopped
+		volumes:
+			- ./promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+			- /var/log:/var/log:ro
+		command: -config.file=/etc/promtail/promtail-config.yml
+		depends_on:
+			- loki
+		networks:
+			- %s
+`, version, port, network, network)
 
 	var fullContent string
 
