@@ -155,7 +155,7 @@ func ensureComposeConfig(version, port, network, grafanaEnabled, grafanaPort str
 		return
 	}
 
-	lokiService := fmt.Sprintf(`version: '3'
+			 lokiService := fmt.Sprintf(`version: '3'
 
 services:
 	loki:
@@ -184,7 +184,18 @@ services:
 			- loki
 		networks:
 			- %s
-`, version, port, network, network)
+
+	prometheus:
+		image: prom/prometheus:latest
+		container_name: prometheus
+		restart: unless-stopped
+		ports:
+			- "9090:9090"
+		volumes:
+			- ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+		networks:
+			- %s
+`, version, port, network, network, network)
 
 	var fullContent string
 
