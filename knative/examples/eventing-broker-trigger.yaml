@@ -1,0 +1,32 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: event-display
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - image: gcr.io/knative-releases/knative.dev/eventing/cmd/event_display:latest
+---
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  name: default
+  namespace: default
+---
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: event-display-trigger
+  namespace: default
+spec:
+  broker: default
+  filter:
+    attributes:
+      type: dev.knative.sample
+  subscriber:
+    ref:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      name: event-display

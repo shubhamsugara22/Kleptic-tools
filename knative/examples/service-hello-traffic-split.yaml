@@ -1,0 +1,22 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: hello
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+    spec:
+      containers:
+      - image: ghcr.io/knative/helloworld-go:latest
+        env:
+        - name: TARGET
+          value: "hello from knative v2"
+  traffic:
+  - latestRevision: false
+    revisionName: PREVIOUS_REVISION_NAME
+    percent: 50
+  - latestRevision: true
+    percent: 50
