@@ -47,6 +47,34 @@ flowchart LR
 
 This section gives you a practical local setup for Knative Serving and Eventing.
 
+### Fast Path (Scripted Setup)
+
+From this directory, run one of the setup scripts:
+
+```bash
+# Linux/macOS/Git Bash
+chmod +x setup.sh
+./setup.sh
+
+# Optional: install and deploy all sample manifests
+./setup.sh --with-examples
+```
+
+```powershell
+# Windows PowerShell
+.\setup.ps1
+
+# Optional: install and deploy all sample manifests
+.\setup.ps1 -WithExamples
+```
+
+Useful script options:
+
+- `--skip-serving` / `-SkipServing`
+- `--skip-eventing` / `-SkipEventing`
+- `--with-examples` / `-WithExamples`
+- `--timeout <seconds>` / `-TimeoutSeconds <int>`
+
 ### Prerequisites
 
 - A Kubernetes cluster (local or remote). Examples: kind, minikube, k3d, AKS, EKS, GKE.
