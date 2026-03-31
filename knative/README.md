@@ -198,6 +198,75 @@ Check logs from the target service:
 kubectl logs -l serving.knative.dev/service=event-display -c user-container --tail=50
 ```
 
+## Architecture and Flow Diagrams (Real Scenarios)
+
+### 1. HTTP Request Path (Serving)
+
+This shows how a client request is routed to a Knative revision and then to a pod.
+
+```mermaid
+flowchart LR
+    C[Client] --> DNS[DNS]
+    DNS --> LB[External Load Balancer]
+    LB --> KQ[Kourier Gateway]
+    KQ --> VS[Virtual Service/Route]
+    VS --> KSVC[Knative Service]
+    KSVC --> REV[Active Revision]
+    REV --> POD[User Pod]
+    POD --> RSP[HTTP Response]
+    RSP --> C
+```
+
+### 2. Event Flow Path (Eventing)
+
+This shows a CloudEvent traveling through Broker and Trigger to a subscriber service.
+
+```mermaid
+flowchart LR
+    SRC[Event Source] --> INGRESS[Broker Ingress]
+    INGRESS --> FILTER[Trigger Filter]
+    FILTER --> SUB[Subscriber: Knative Service]
+    SUB --> REV2[Subscriber Revision]
+    REV2 --> POD2[Subscriber Pod]
+    POD2 --> LOG[Logs or downstream action]
+```
+
+### 3. Revision Rollout and Traffic Split
+
+This shows a practical canary release flow from v1 to v2.
+
+```mermaid
+flowchart TD
+    A[Deploy v1] --> B[Revision v1 receives 100% traffic]
+    B --> C[Deploy v2]
+    C --> D[Set traffic split 90/10]
+    D --> E[Observe metrics and errors]
+    E --> F{Healthy?}
+    F -- Yes --> G[Shift to 50/50]
+    G --> H[Shift to 100% v2]
+    H --> I[Retire v1]
+    F -- No --> J[Rollback traffic to 100% v1]
+```
+
+### 4. Scale-to-Zero and Cold Start Lifecycle
+
+This shows how Knative scales workloads down during idle time and back up on new traffic.
+
+```mermaid
+flowchart TD
+    RQ1[Incoming Request] --> AC[Autoscaler checks active pods]
+    AC --> D1{Any ready pods?}
+    D1 -- Yes --> RT[Route to existing pod]
+    D1 -- No --> UP[Scale deployment from 0 to N]
+    UP --> WS[Wait for pod startup]
+    WS --> RT
+    RT --> RS[Return response]
+    RS --> IDLE[Idle period starts]
+    IDLE --> AC2[Autoscaler observes low traffic]
+    AC2 --> SZ[Scale down to zero]
+    SZ --> RQ2[Next request triggers cold start again]
+```
+
 ## Verification Checklist
 
 - `kubectl get ksvc` shows your services as `READY=True`.
