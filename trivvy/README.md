@@ -2,6 +2,11 @@
 
 Trivy is a comprehensive and versatile security scanner developed by Aqua Security. It scans for vulnerabilities, misconfigurations, secrets, and license issues across multiple artifact types in your application lifecycle.
 
+## Quick Guides
+
+- [Container Setup](container-setup.md) - Basic container image scanning workflow
+- [Misconfiguration Scanning](misconfiguration-scanning.md) - Focused examples for IaC and manifest security checks
+
 ## Overview
 
 Trivy is designed to be:
