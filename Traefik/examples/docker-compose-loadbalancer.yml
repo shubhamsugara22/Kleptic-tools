@@ -55,7 +55,7 @@ services:
       - "traefik.http.services.api.loadbalancer.sticky.cookie.name=lb_sticky"
       - "traefik.http.services.api.loadbalancer.sticky.cookie.httponly=true"
       # Health check — Traefik removes unhealthy containers from rotation
-      - "traefik.http.services.api.loadbalancer.healthcheck.path=/healthz"
+      - "traefik.http.services.api.loadbalancer.healthcheck.path=/"
       - "traefik.http.services.api.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.api.loadbalancer.healthcheck.timeout=3s"
     networks:

@@ -10,6 +10,12 @@ NETWORK_NAME="${TRAEFIK_NETWORK:-traefik-network}"
 TRAEFIK_VERSION="${TRAEFIK_VERSION:-v3.0}"
 DASHBOARD_PORT="${TRAEFIK_DASHBOARD_PORT:-8080}"
 EMAIL="${TRAEFIK_ACME_EMAIL:-your-email@example.com}"
+MODE="${TRAEFIK_MODE:-dev}"
+
+if [ "$MODE" != "dev" ] && [ "$MODE" != "prod" ]; then
+  echo "Invalid TRAEFIK_MODE: $MODE (expected: dev or prod)" >&2
+  exit 1
+fi
 
 compose_cmd() {
   if command -v docker >/dev/null 2>&1; then
@@ -40,7 +46,48 @@ if ! docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
 fi
 
 if [ ! -f traefik.yml ]; then
-  cat > traefik.yml <<EOF
+  if [ "$MODE" = "prod" ]; then
+    cat > traefik.yml <<EOF
+api:
+  dashboard: true
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "$EMAIL"
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: $NETWORK_NAME
+
+log:
+  level: INFO
+
+accessLog: {}
+EOF
+  else
+    cat > traefik.yml <<EOF
 api:
   dashboard: true
   insecure: true
@@ -62,10 +109,35 @@ log:
 
 accessLog: {}
 EOF
+  fi
 fi
 
 if [ ! -f docker-compose.yml ]; then
-  cat > docker-compose.yml <<EOF
+  if [ "$MODE" = "prod" ]; then
+    cat > docker-compose.yml <<EOF
+version: '3'
+
+services:
+  traefik:
+    image: traefik:$TRAEFIK_VERSION
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./acme.json:/acme.json
+    networks:
+      - $NETWORK_NAME
+
+networks:
+  $NETWORK_NAME:
+    external: true
+EOF
+  else
+    cat > docker-compose.yml <<EOF
 version: '3'
 
 services:
@@ -88,6 +160,7 @@ networks:
   $NETWORK_NAME:
     external: true
 EOF
+  fi
 fi
 
 if [ ! -f acme.json ]; then
@@ -95,7 +168,7 @@ if [ ! -f acme.json ]; then
   chmod 600 acme.json
 fi
 
-# Inject ACME email if a template exists and no email is set
+# Inject ACME email if a template exists
 if grep -q "your-email@example.com" traefik.yml; then
   sed -i.bak "s/your-email@example.com/${EMAIL}/" traefik.yml || true
   rm -f traefik.yml.bak
@@ -103,4 +176,8 @@ fi
 
 $COMPOSE_BIN up -d
 
-echo "Traefik is running. Dashboard: http://localhost:${DASHBOARD_PORT}"
+if [ "$MODE" = "prod" ]; then
+  echo "Traefik is running in production mode (dashboard insecure endpoint disabled)."
+else
+  echo "Traefik is running. Dashboard: http://localhost:${DASHBOARD_PORT}"
+fi

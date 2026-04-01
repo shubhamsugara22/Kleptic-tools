@@ -26,18 +26,26 @@ func main() {
 	traefikVersion := getenvDefault("TRAEFIK_VERSION", "v3.0")
 	dashboardPort := getenvDefault("TRAEFIK_DASHBOARD_PORT", "8080")
 	acmeEmail := getenvDefault("TRAEFIK_ACME_EMAIL", "your-email@example.com")
+	mode := getenvDefault("TRAEFIK_MODE", "dev")
+	if mode != "dev" && mode != "prod" {
+		exitErr("TRAEFIK_MODE must be one of: dev, prod", nil)
+	}
 
 	ensureDocker()
 	composeBin := resolveCompose()
 
 	ensureNetwork(networkName)
-	ensureTraefikConfig(networkName)
-	ensureComposeConfig(traefikVersion, dashboardPort, networkName)
+	ensureTraefikConfig(networkName, acmeEmail, mode)
+	ensureComposeConfig(traefikVersion, dashboardPort, networkName, mode)
 	ensureAcme()
 	injectAcmeEmail(acmeEmail)
 
 	runCmd(composeBin, "up", "-d")
-	fmt.Printf("Traefik is running. Dashboard: http://localhost:%s\n", dashboardPort)
+	if mode == "prod" {
+		fmt.Println("Traefik is running in production mode (dashboard insecure endpoint disabled).")
+	} else {
+		fmt.Printf("Traefik is running. Dashboard: http://localhost:%s\n", dashboardPort)
+	}
 }
 
 func getenvDefault(key, fallback string) string {
@@ -76,11 +84,52 @@ func ensureNetwork(network string) {
 	runCmd("docker", "network", "create", network)
 }
 
-func ensureTraefikConfig(network string) {
+func ensureTraefikConfig(network, email, mode string) {
 	if fileExists("traefik.yml") {
 		return
 	}
-	content := fmt.Sprintf(`api:
+	var content string
+	if mode == "prod" {
+		content = fmt.Sprintf(`api:
+  dashboard: true
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "%s"
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: %s
+
+log:
+  level: INFO
+
+accessLog: {}
+`, email, network)
+	} else {
+		content = fmt.Sprintf(`api:
   dashboard: true
   insecure: true
 
@@ -101,14 +150,39 @@ log:
 
 accessLog: {}
 `, network)
+	}
 	writeFile("traefik.yml", content)
 }
 
-func ensureComposeConfig(version, dashboardPort, network string) {
+func ensureComposeConfig(version, dashboardPort, network, mode string) {
 	if fileExists("docker-compose.yml") {
 		return
 	}
-	content := fmt.Sprintf(`version: '3'
+	var content string
+	if mode == "prod" {
+		content = fmt.Sprintf(`version: '3'
+
+services:
+  traefik:
+    image: traefik:%s
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./acme.json:/acme.json
+    networks:
+      - %s
+
+networks:
+  %s:
+    external: true
+`, version, network, network)
+	} else {
+		content = fmt.Sprintf(`version: '3'
 
 services:
   traefik:
@@ -130,6 +204,7 @@ networks:
   %s:
     external: true
 `, version, dashboardPort, network, network)
+	}
 	writeFile("docker-compose.yml", content)
 }
 

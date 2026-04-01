@@ -164,6 +164,23 @@ accessLog: {}
 
 ## Configuration Examples
 
+Runnable examples in this repository:
+
+- [examples/docker-compose-ssl.yml](examples/docker-compose-ssl.yml) (HTTPS + Let's Encrypt + secured dashboard)
+- [examples/docker-compose-loadbalancer.yml](examples/docker-compose-loadbalancer.yml) (replicas + sticky sessions + health checks)
+- [examples/docker-compose-auth.yml](examples/docker-compose-auth.yml) (basic auth + forward auth + IP allowlist)
+- [examples/docker-compose-ratelimit-cors.yml](examples/docker-compose-ratelimit-cors.yml) (rate limiting + CORS + security headers)
+
+Minimal Kubernetes examples in this repository:
+
+- [k8s/whoami-deployment.yaml](k8s/whoami-deployment.yaml) (demo app + service)
+- [k8s/middlewares.yaml](k8s/middlewares.yaml) (redirect and headers middleware)
+- [k8s/ingressroute.yaml](k8s/ingressroute.yaml) (Traefik IngressRoute wiring)
+
+Environment template for these examples:
+
+- [.env.example](.env.example)
+
 ### Example 1: Simple Web Application
 
 **docker-compose.yml for your app:**
