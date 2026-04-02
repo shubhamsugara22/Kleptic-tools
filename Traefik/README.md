@@ -4,7 +4,9 @@ Traefik is a modern HTTP reverse proxy and load balancer that makes deploying mi
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
 - [Installation](#installation)
+  - [Script-Based Setup](#script-based-setup)
   - [Docker Installation](#docker-installation)
   - [Binary Installation](#binary-installation)
   - [Kubernetes Installation](#kubernetes-installation)
@@ -21,6 +23,44 @@ Traefik is a modern HTTP reverse proxy and load balancer that makes deploying mi
 - Kubernetes cluster (for K8s installation)
 - Domain name (for SSL/TLS setup)
 - Basic understanding of reverse proxies
+
+## Quick Start
+
+From the `Traefik` folder, use either script with `TRAEFIK_MODE=dev` or `TRAEFIK_MODE=prod`.
+
+### Script-Based Setup
+
+**Bash setup script**
+
+```bash
+cd Traefik
+
+# Dev mode: exposes dashboard at TRAEFIK_DASHBOARD_PORT (default 8080)
+TRAEFIK_MODE=dev ./setup.sh
+
+# Prod mode: disables insecure dashboard endpoint and enables HTTPS redirect + ACME config
+TRAEFIK_MODE=prod TRAEFIK_ACME_EMAIL=you@example.com ./setup.sh
+```
+
+**Go setup script**
+
+```bash
+cd Traefik
+
+# Dev mode
+TRAEFIK_MODE=dev go run setup.go
+
+# Prod mode
+TRAEFIK_MODE=prod TRAEFIK_ACME_EMAIL=you@example.com go run setup.go
+```
+
+Optional environment variables for both scripts:
+
+- `TRAEFIK_MODE` (`dev` or `prod`, default: `dev`)
+- `TRAEFIK_NETWORK` (default: `traefik-network`)
+- `TRAEFIK_VERSION` (default: `v3.0`)
+- `TRAEFIK_DASHBOARD_PORT` (dev-only, default: `8080`)
+- `TRAEFIK_ACME_EMAIL` (recommended in prod)
 
 ## Installation
 
