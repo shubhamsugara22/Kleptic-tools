@@ -195,7 +195,21 @@ services:
 			- ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
 		networks:
 			- %s
-`, version, port, network, network, network)
+
+	nginx:
+		image: nginx:latest
+		container_name: loki-nginx
+		restart: unless-stopped
+		ports:
+			- "8080:8080"
+		volumes:
+			- ./nginx.conf:/etc/nginx/nginx.conf:ro
+			- ./nginx.htpasswd:/etc/nginx/.htpasswd:ro
+		depends_on:
+			- loki
+		networks:
+			- %s
+`, version, port, network, network, network, network)
 
 	var fullContent string
 
