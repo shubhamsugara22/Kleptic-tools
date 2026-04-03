@@ -1,4 +1,6 @@
-auth_enabled: false
+
+# Enable multi-tenant support
+auth_enabled: true
 
 ingester:
   chunk_idle_period: 3m
