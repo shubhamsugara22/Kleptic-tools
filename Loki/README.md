@@ -214,6 +214,43 @@ volumes:
   grafana-data:
 ```
 
+## Security: Nginx Reverse Proxy & Basic Auth
+
+Loki is secured by an Nginx reverse proxy with basic authentication. By default, Nginx listens on port 8080 and proxies requests to Loki. The default credentials are:
+
+- Username: `admin`
+- Password: `admin`
+
+To change the password, update the `nginx.htpasswd` file (use an htpasswd generator).
+
+**Access Loki securely:**
+
+- Use: `http://localhost:8080` (you will be prompted for credentials)
+- All direct access to Loki (port 3100) can be firewalled or restricted to internal containers.
+
+### Docker Compose with Nginx Security
+
+The setup includes an Nginx service:
+
+```yaml
+  nginx:
+    image: nginx:latest
+    container_name: loki-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - loki
+    networks:
+      - loki-network
+```
+
+- All requests to Loki should go through Nginx for authentication.
+- Update `nginx.conf` and `nginx.htpasswd` for custom security needs.
+
 ## Querying Logs
 
 ### LogQL - Loki Query Language
