@@ -84,7 +84,7 @@ func ensureLokiConfig() {
 	if fileExists("loki-config.yml") {
 		return
 	}
- 	content := `auth_enabled: true
+	content := `auth_enabled: true
 
 ingester:
   chunk_idle_period: 3m

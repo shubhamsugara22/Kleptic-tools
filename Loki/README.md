@@ -225,8 +225,9 @@ To change the password, update the `nginx.htpasswd` file (use an htpasswd genera
 
 **Access Loki securely:**
 
-- Use: `http://localhost:8080` (you will be prompted for credentials)
-- All direct access to Loki (port 3100) can be firewalled or restricted to internal containers.
+- Use: `http://localhost:8080` (redirects to TLS)
+- Use: `https://localhost:8443` for encrypted access
+- Loki is now intended for internal Docker-network access only, with external traffic routed through Nginx.
 
 ### Docker Compose with Nginx Security
 
@@ -250,6 +251,13 @@ The setup includes an Nginx service:
 
 - All requests to Loki should go through Nginx for authentication.
 - Update `nginx.conf` and `nginx.htpasswd` for custom security needs.
+
+### Additional Hardening Enabled
+
+- HTTPS termination at Nginx (`8443`)
+- Basic authentication for all Loki routes
+- Request rate limiting (`20 req/sec` per client IP)
+- Audit-style Nginx access logging and warning-level error logging
 
 ## Querying Logs
 
