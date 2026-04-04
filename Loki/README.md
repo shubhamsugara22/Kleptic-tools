@@ -9,8 +9,11 @@ Loki is a horizontally scalable, highly available, multi-tenant log aggregation 
   - [Binary Installation](#binary-installation)
   - [Kubernetes Installation](#kubernetes-installation)
 - [Basic Configuration](#basic-configuration)
+- [Environment & Secrets](#environment--secrets)
 - [Docker Compose Setup](#docker-compose-setup)
 - [Grafana Integration](#grafana-integration)
+- [Grafana Alerting Defaults](#grafana-alerting-defaults)
+- [Nginx Exporter Metrics](#nginx-exporter-metrics)
 - [Querying Logs](#querying-logs)
 - [Troubleshooting](#troubleshooting)
 
@@ -148,6 +151,25 @@ table_manager:
   retention_period: 0s
 ```
 
+## Environment & Secrets
+
+1. Copy `.env.example` to `.env` and change sensitive values:
+
+```bash
+cp .env.example .env
+```
+
+2. Update at minimum:
+- `GRAFANA_ADMIN_PASSWORD`
+- `GRAFANA_ALERT_EMAIL`
+
+3. Keep secrets out of Git:
+- `.env`
+- `nginx.htpasswd`
+- TLS certificates in `certs/`
+
+The local `.gitignore` in this folder already excludes these files.
+
 ## Docker Compose Setup
 
 1. **Create the project structure:**
@@ -214,6 +236,16 @@ volumes:
   grafana-data:
 ```
 
+## Grafana Alerting Defaults
+
+Provisioning files are included under `grafana/provisioning`:
+
+- `datasources/datasources.yml` provisions Loki and Prometheus.
+- `alerting/contact-points.yml` provisions an email contact point using `GRAFANA_ALERT_EMAIL`.
+- `alerting/rules.yml` provisions a starter alert that fires when `promtail` is down.
+
+Grafana unified alerting is enabled in the generated compose setup.
+
 ## Security: Nginx Reverse Proxy & Basic Auth
 
 Loki is secured by an Nginx reverse proxy with basic authentication. By default, Nginx listens on port 8080 and proxies requests to Loki. The default credentials are:
@@ -258,6 +290,15 @@ The setup includes an Nginx service:
 - Basic authentication for all Loki routes
 - Request rate limiting (`20 req/sec` per client IP)
 - Audit-style Nginx access logging and warning-level error logging
+
+## Nginx Exporter Metrics
+
+Nginx metrics are exposed through `nginx-prometheus-exporter` and scraped by Prometheus.
+
+- Exporter target in Prometheus: `nginx-exporter:9113`
+- Nginx status endpoint used by exporter: `http://nginx:9113/stub_status`
+
+After startup, verify in Prometheus UI (`http://localhost:9090`) that the `nginx_exporter` job is `UP`.
 
 ## Querying Logs
 
