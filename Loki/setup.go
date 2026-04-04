@@ -22,7 +22,8 @@ func main() {
 
 	networkName := getenvDefault("LOKI_NETWORK", "loki-network")
 	lokiVersion := getenvDefault("LOKI_VERSION", "latest")
-	lokiPort := getenvDefault("LOKI_PORT", "3100")
+	nginxHTTPPort := getenvDefault("NGINX_HTTP_PORT", "8080")
+	nginxHTTPSPort := getenvDefault("NGINX_HTTPS_PORT", "8443")
 	grafanaEnabled := getenvDefault("GRAFANA_ENABLED", "false")
 	grafanaPort := getenvDefault("GRAFANA_PORT", "3000")
 
@@ -32,10 +33,12 @@ func main() {
 	ensureNetwork(networkName)
 	ensureLokiConfig()
 	ensurePromtailConfig()
-	ensureComposeConfig(lokiVersion, lokiPort, networkName, grafanaEnabled, grafanaPort)
+	ensurePrometheusConfig()
+	ensureNginxConfig()
+	ensureComposeConfig(lokiVersion, networkName, grafanaEnabled, grafanaPort, nginxHTTPPort, nginxHTTPSPort)
 
 	runCmd(composeBin, "up", "-d")
-	fmt.Printf("Loki is running on http://localhost:%s\n", lokiPort)
+	fmt.Printf("Loki is available behind Nginx: http://localhost:%s and https://localhost:%s\n", nginxHTTPPort, nginxHTTPSPort)
 	if grafanaEnabled == "true" {
 		fmt.Printf("Grafana is running on http://localhost:%s\n", grafanaPort)
 	}
@@ -81,37 +84,12 @@ func ensureLokiConfig() {
 	if fileExists("loki-config.yml") {
 		return
 	}
-	content := `auth_enabled: false
+ 	content := `auth_enabled: true
 
 ingester:
   chunk_idle_period: 3m
   chunk_retain_period: 1m
   max_chunk_age: 1h
-func ensurePromtailConfig() {
-	if fileExists("promtail-config.yml") {
-		return
-	}
-	content := `server:
-  http_listen_port: 9080
-  grpc_listen_port: 0
-
-positions:
-  filename: /tmp/positions.yaml
-
-clients:
-  - url: http://loki:3100/loki/api/v1/push
-
-scrape_configs:
-  - job_name: system-logs
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: varlogs
-          __path__: /var/log/*.log
-`
-	writeFile("promtail-config.yml", content)
-}
   chunk_encoding: snappy
 
 limits_config:
@@ -144,26 +122,120 @@ chunk_store_config:
   max_look_back_period: 0s
 
 table_manager:
-  retention_deletes_enabled: false
-  retention_period: 0s
+	retention_deletes_enabled: true
+	retention_period: 168h
 `
 	writeFile("loki-config.yml", content)
 }
 
-func ensureComposeConfig(version, port, network, grafanaEnabled, grafanaPort string) {
+func ensurePromtailConfig() {
+	if fileExists("promtail-config.yml") {
+		return
+	}
+	content := `server:
+	http_listen_port: 9080
+	grpc_listen_port: 0
+
+positions:
+	filename: /tmp/positions.yaml
+
+clients:
+	- url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+	- job_name: system-logs
+		static_configs:
+			- targets:
+					- localhost
+				labels:
+					job: varlogs
+					__path__: /var/log/*.log
+`
+	writeFile("promtail-config.yml", content)
+}
+
+func ensurePrometheusConfig() {
+	if fileExists("prometheus.yml") {
+		return
+	}
+	content := `global:
+	scrape_interval: 15s
+
+scrape_configs:
+	- job_name: 'prometheus'
+		static_configs:
+			- targets: ['localhost:9090']
+
+	- job_name: 'loki'
+		static_configs:
+			- targets: ['loki:3100']
+
+	- job_name: 'promtail'
+		static_configs:
+			- targets: ['promtail:9080']
+`
+	writeFile("prometheus.yml", content)
+}
+
+func ensureNginxConfig() {
+	if fileExists("nginx.conf") {
+		return
+	}
+	content := `events {}
+http {
+		log_format audit '$remote_addr - $remote_user [$time_local] "$request" '
+										 '$status $body_bytes_sent "$http_referer" '
+										 '"$http_user_agent" "$http_x_forwarded_for"';
+
+		access_log /var/log/nginx/access.log audit;
+		error_log /var/log/nginx/error.log warn;
+
+		limit_req_zone $binary_remote_addr zone=loki_rate:10m rate=20r/s;
+
+		server {
+				listen 8080;
+				server_name _;
+				return 301 https://$host:8443$request_uri;
+		}
+
+		server {
+				listen 8443 ssl;
+				server_name _;
+
+				ssl_certificate /etc/nginx/certs/loki.crt;
+				ssl_certificate_key /etc/nginx/certs/loki.key;
+				ssl_protocols TLSv1.2 TLSv1.3;
+				ssl_ciphers HIGH:!aNULL:!MD5;
+
+				auth_basic "Loki Auth";
+				auth_basic_user_file /etc/nginx/.htpasswd;
+
+				location / {
+						limit_req zone=loki_rate burst=40 nodelay;
+						proxy_pass http://loki:3100;
+						proxy_set_header Host $host;
+						proxy_set_header X-Real-IP $remote_addr;
+						proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+						proxy_set_header X-Forwarded-Proto $scheme;
+				}
+		}
+}
+`
+	writeFile("nginx.conf", content)
+}
+
+func ensureComposeConfig(version, network, grafanaEnabled, grafanaPort, nginxHTTPPort, nginxHTTPSPort string) {
 	if fileExists("docker-compose.yml") {
 		return
 	}
 
-			 lokiService := fmt.Sprintf(`version: '3'
+	lokiService := fmt.Sprintf(`version: '3'
 
 services:
 	loki:
 		image: grafana/loki:%s
 		container_name: loki
 		restart: unless-stopped
-		ports:
-			- "%s:3100"
 		volumes:
 			- ./loki-config.yml:/etc/loki/local-config.yml:ro
 			- loki-data:/loki
@@ -201,15 +273,17 @@ services:
 		container_name: loki-nginx
 		restart: unless-stopped
 		ports:
-			- "8080:8080"
+			- "%s:8080"
+			- "%s:8443"
 		volumes:
 			- ./nginx.conf:/etc/nginx/nginx.conf:ro
 			- ./nginx.htpasswd:/etc/nginx/.htpasswd:ro
+			- ./certs:/etc/nginx/certs:ro
 		depends_on:
 			- loki
 		networks:
 			- %s
-`, version, port, network, network, network, network)
+`, version, network, network, network, nginxHTTPPort, nginxHTTPSPort, network)
 
 	var fullContent string
 
