@@ -1,0 +1,36 @@
+# ---- Secrets & Credentials ----
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+
+# ---- Kong Data ----
+kong-data/
+postgres-data/
+data/
+
+# ---- Go Build Artifacts ----
+*.exe
+*.out
+bin/
+vendor/
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- Docker ----
+docker-compose.override.yml
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- IDE ----
+.vscode/settings.json
+.idea/
+*.swp
