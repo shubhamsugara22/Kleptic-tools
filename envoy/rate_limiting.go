@@ -38,22 +38,22 @@ func GenerateLocalRateLimitConfig(cfg RateLimitConfig) map[string]interface{} {
 		{
 			"name": "envoy.filters.http.local_ratelimit",
 			"typed_config": map[string]interface{}{
-				"@type":        "type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit",
-				"stat_prefix":  "http_local_rate_limiter",
+				"@type":       "type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit",
+				"stat_prefix": "http_local_rate_limiter",
 				"token_bucket": map[string]interface{}{
 					"max_tokens":      cfg.TokenBucket.MaxTokens,
 					"tokens_per_fill": cfg.TokenBucket.TokensPerFill,
 					"fill_interval":   cfg.TokenBucket.FillInterval,
 				},
 				"filter_enabled": map[string]interface{}{
-					"runtime_key":  "local_rate_limit_enabled",
+					"runtime_key": "local_rate_limit_enabled",
 					"default_value": map[string]interface{}{
 						"numerator":   100,
 						"denominator": "HUNDRED",
 					},
 				},
 				"filter_enforced": map[string]interface{}{
-					"runtime_key":  "local_rate_limit_enforced",
+					"runtime_key": "local_rate_limit_enforced",
 					"default_value": map[string]interface{}{
 						"numerator":   100,
 						"denominator": "HUNDRED",
@@ -105,8 +105,8 @@ func GenerateLocalRateLimitConfig(cfg RateLimitConfig) map[string]interface{} {
 													"domains": []string{"*"},
 													"routes": []map[string]interface{}{
 														{
-															"match":  map[string]string{"prefix": "/"},
-															"route":  map[string]string{"cluster": cfg.ClusterName},
+															"match": map[string]string{"prefix": "/"},
+															"route": map[string]string{"cluster": cfg.ClusterName},
 														},
 													},
 												},
@@ -122,10 +122,10 @@ func GenerateLocalRateLimitConfig(cfg RateLimitConfig) map[string]interface{} {
 			},
 			"clusters": []map[string]interface{}{
 				{
-					"name":                   cfg.ClusterName,
-					"connect_timeout":        "0.25s",
-					"type":                   "LOGICAL_DNS",
-					"lb_policy":              "ROUND_ROBIN",
+					"name":            cfg.ClusterName,
+					"connect_timeout": "0.25s",
+					"type":            "LOGICAL_DNS",
+					"lb_policy":       "ROUND_ROBIN",
 					"load_assignment": map[string]interface{}{
 						"cluster_name": cfg.ClusterName,
 						"endpoints": []map[string]interface{}{
@@ -160,7 +160,7 @@ func GenerateLocalRateLimitConfig(cfg RateLimitConfig) map[string]interface{} {
 }
 
 // GenerateGlobalRateLimitConfig generates an Envoy config with global rate limiting via external service
-func GenerateGlobalRateLimitConfig(cfg RateLimitConfig) map[string]interface{}{
+func GenerateGlobalRateLimitConfig(cfg RateLimitConfig) map[string]interface{} {
 	descriptors := []map[string]interface{}{}
 	for _, d := range cfg.Descriptors {
 		descriptors = append(descriptors, map[string]interface{}{
@@ -174,8 +174,8 @@ func GenerateGlobalRateLimitConfig(cfg RateLimitConfig) map[string]interface{}{
 		{
 			"name": "envoy.filters.http.ratelimit",
 			"typed_config": map[string]interface{}{
-				"@type":            "type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit",
-				"domain":           "envoy_ratelimit",
+				"@type":             "type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit",
+				"domain":            "envoy_ratelimit",
 				"failure_mode_deny": false,
 				"rate_limit_service": map[string]interface{}{
 					"grpc_service": map[string]interface{}{
@@ -269,10 +269,10 @@ func GenerateGlobalRateLimitConfig(cfg RateLimitConfig) map[string]interface{}{
 					},
 				},
 				{
-					"name":             "rate_limit_cluster",
-					"connect_timeout":  "0.25s",
-					"type":             "STRICT_DNS",
-					"lb_policy":        "ROUND_ROBIN",
+					"name":                   "rate_limit_cluster",
+					"connect_timeout":        "0.25s",
+					"type":                   "STRICT_DNS",
+					"lb_policy":              "ROUND_ROBIN",
 					"http2_protocol_options": map[string]interface{}{},
 					"load_assignment": map[string]interface{}{
 						"cluster_name": "rate_limit_cluster",
