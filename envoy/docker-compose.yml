@@ -1,0 +1,225 @@
+# docker-compose.yml — Kleptic Tools Envoy local development stack
+#
+# Services
+# ─────────────────────────────────────────────────────────────────────────────
+#  envoy       Custom Envoy image (built from ./Dockerfile)
+#  backend     Echo server — reflects every request as JSON (upstream target)
+#  zipkin      Distributed tracing UI  → http://localhost:9411
+#  prometheus  Metrics scraper         → http://localhost:9090
+#  grafana     Dashboards (optional)   → http://localhost:3000  (admin/admin)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Quick start:
+#   docker compose up --build
+#
+# Access Envoy:
+#   curl http://localhost:10000/
+#
+# Envoy admin:
+#   curl http://localhost:9901/stats/prometheus
+#   open http://localhost:9901/
+#
+# Zipkin UI:
+#   open http://localhost:9411/
+#
+# Prometheus:
+#   open http://localhost:9090/
+#
+# Grafana (credentials: admin / admin):
+#   open http://localhost:3000/
+
+name: kleptic-envoy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared network
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  envoy-net:
+    driver: bridge
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Named volumes (Prometheus and Grafana persistence)
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  prometheus-data: {}
+  grafana-data: {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Services
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+
+  # ── Envoy ──────────────────────────────────────────────────────────────────
+  envoy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ENVOY_VERSION: "v1.29-latest"
+    image: kleptic/envoy:latest
+    container_name: kleptic-envoy
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - zipkin
+    ports:
+      - "10000:10000" # proxy listener
+      - "9901:9901" # admin / Prometheus metrics endpoint
+    volumes:
+      # Mount a custom config to override the built-in one without rebuilding.
+      # Remove this line to use the config baked into the image.
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    environment:
+      SERVICE_CLUSTER: kleptic-envoy
+      SERVICE_NODE: envoy-compose-1
+    networks:
+      - envoy-net
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:9901/ready" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Backend echo server ────────────────────────────────────────────────────
+  # Reflects the full request back as JSON — great for observing headers,
+  # tracing propagation and JWT forwarding.
+  backend:
+    image: ealen/echo-server:latest
+    container_name: kleptic-backend
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+    expose:
+      - "8080"
+    networks:
+      - envoy-net
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ── Zipkin (distributed tracing) ──────────────────────────────────────────
+  # Envoy's tracing.go config points to this service's hostname "zipkin:9411".
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: kleptic-zipkin
+    restart: unless-stopped
+    ports:
+      - "9411:9411"
+    networks:
+      - envoy-net
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:9411/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  # Scrapes the Envoy admin endpoint at :9901/stats/prometheus.
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: kleptic-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      # Inline scrape config avoids needing an extra file.
+      # If you prefer a separate file, replace this with:
+      #   - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+    networks:
+      - envoy-net
+    depends_on:
+      - envoy
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:9090/-/healthy" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Grafana (optional) ────────────────────────────────────────────────────
+  # Pre-configured to use Prometheus as data source.
+  # Login: admin / admin  (change GF_SECURITY_ADMIN_PASSWORD in production)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: kleptic-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Auto-provision Prometheus data source
+      GF_DATASOURCES_DEFAULT_URL: http://prometheus:9090
+    networks:
+      - envoy-net
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:3000/api/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configs (Docker Compose v2 configs for embedding small config files)
+# ─────────────────────────────────────────────────────────────────────────────
+configs:
+  prometheus_config:
+    content: |
+      global:
+        scrape_interval:     15s
+        evaluation_interval: 15s
+        external_labels:
+          monitor: kleptic-envoy
+
+      scrape_configs:
+        # Envoy admin Prometheus endpoint
+        - job_name: envoy
+          static_configs:
+            - targets: ["envoy:9901"]
+          metrics_path: /stats/prometheus
+
+        # Prometheus self-scrape
+        - job_name: prometheus
+          static_configs:
+            - targets: ["localhost:9090"]
